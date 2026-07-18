@@ -1,0 +1,191 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+.zone {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  max-width: 420px;
+  pointer-events: none; /* cards re-enable their own pointer events */
+}
+
+.zone[data-pos="top-left"] {
+  top: 0;
+  left: 0;
+  align-items: flex-start;
+}
+.zone[data-pos="top-center"] {
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  align-items: center;
+}
+.zone[data-pos="top-right"] {
+  top: 0;
+  right: 0;
+  align-items: flex-end;
+}
+.zone[data-pos="bottom-left"] {
+  bottom: 0;
+  left: 0;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+}
+.zone[data-pos="bottom-center"] {
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  flex-direction: column-reverse;
+  align-items: center;
+}
+.zone[data-pos="bottom-right"] {
+  bottom: 0;
+  right: 0;
+  flex-direction: column-reverse;
+  align-items: flex-end;
+}
+
+.card {
+  pointer-events: auto;
+  position: relative;
+  width: 360px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: #1e1e2e;
+  color: #f5f5f5;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  border-left: 4px solid #6c8cff;
+  backdrop-filter: blur(6px);
+  opacity: 0;
+  transform: translateY(-12px) scale(0.98);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.card.show {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.card.hide {
+  opacity: 0;
+  transform: translateY(-12px) scale(0.98);
+}
+
+/* Flash on a repeat arrival (count bump). */
+@keyframes card-pulse {
+  0% { transform: translateY(0) scale(1); }
+  40% { transform: translateY(0) scale(1.03); }
+  100% { transform: translateY(0) scale(1); }
+}
+.card.pulse {
+  animation: card-pulse 0.3s ease;
+}
+
+.card .main {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.card .icon {
+  font-size: 22px;
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+
+.card .content {
+  flex: 1;
+  min-width: 0;
+}
+
+.card .title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 3px;
+  word-wrap: break-word;
+}
+
+.card .body {
+  font-size: 13px;
+  line-height: 1.45;
+  opacity: 0.9;
+  word-wrap: break-word;
+}
+
+/* Repeat counter — how many times this alert fired before dismissal. */
+.card .badge {
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* Snooze / mute / close — revealed on hover (you must hover to interact
+   anyway, since the overlay is otherwise click-through). */
+.card .actions {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.card:hover .actions {
+  opacity: 1;
+}
+
+.card .actions .act,
+.card .actions .close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.55;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.card .actions .act {
+  font-size: 13px;
+}
+.card .actions .close {
+  font-size: 17px;
+}
+.card .actions .act:hover,
+.card .actions .close:hover {
+  opacity: 1;
+}
+
+.card .progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: currentColor;
+  opacity: 0.6;
+  border-bottom-left-radius: 14px;
+}

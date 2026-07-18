@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src data:;"
+    />
+    <title>Notifier History</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: "Segoe UI", system-ui, sans-serif;
+        background: #0f1117;
+        color: #e7e9ee;
+        font-size: 14px;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        background: #141824;
+        border-bottom: 1px solid #232838;
+        padding: 14px 18px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      header h1 { font-size: 15px; font-weight: 600; flex: 1; }
+      .btn {
+        background: #232838;
+        color: #e7e9ee;
+        border: 1px solid #313850;
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .btn:hover { background: #2c3346; }
+      .toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+      .toggle input { accent-color: #6c8cff; width: 15px; height: 15px; }
+
+      main { padding: 16px 18px 28px; }
+      h2 {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #8b93a7;
+        margin: 4px 0 10px;
+      }
+
+      .apps { display: flex; flex-direction: column; gap: 6px; margin-bottom: 22px; }
+      .app-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: #141824;
+        border: 1px solid #232838;
+        border-radius: 10px;
+        padding: 8px 12px;
+      }
+      .app-row .name { flex: 1; font-weight: 600; }
+      .app-row .snoozed { color: #f59e0b; font-size: 12px; }
+      .pill-btn {
+        background: none;
+        border: 1px solid #313850;
+        border-radius: 6px;
+        color: #b9c0d0;
+        font-size: 11px;
+        padding: 3px 8px;
+        cursor: pointer;
+      }
+      .pill-btn:hover { background: #232838; color: #fff; }
+
+      .history { display: flex; flex-direction: column; gap: 8px; }
+      .item {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        background: #141824;
+        border: 1px solid #232838;
+        border-left: 3px solid #6c8cff;
+        border-radius: 10px;
+        padding: 10px 12px;
+      }
+      .item .ic { font-size: 20px; flex-shrink: 0; line-height: 1.2; }
+      .item .mid { flex: 1; min-width: 0; }
+      .item .top { display: flex; align-items: center; gap: 8px; }
+      .item .t { font-weight: 600; }
+      .item .chip {
+        font-size: 10px;
+        background: #232838;
+        color: #9aa3b8;
+        border-radius: 5px;
+        padding: 1px 6px;
+      }
+      .item .b { color: #b9c0d0; font-size: 13px; margin-top: 2px; word-break: break-word; }
+      .item .when { color: #737b90; font-size: 11px; margin-top: 3px; }
+      .item .count {
+        flex-shrink: 0;
+        min-width: 22px;
+        height: 22px;
+        padding: 0 6px;
+        border-radius: 11px;
+        background: #ef4444;
+        color: #fff;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 22px;
+        text-align: center;
+      }
+      .empty { color: #737b90; text-align: center; padding: 30px 0; }
+
+      /* Setup / settings */
+      .setup {
+        background: #141824;
+        border: 1px solid #232838;
+        border-radius: 10px;
+        padding: 14px;
+        margin-bottom: 22px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .setup.needed { border-color: #f59e0b; }
+      .field { display: flex; flex-direction: column; gap: 5px; }
+      .field label { font-size: 12px; color: #9aa3b8; }
+      .field .row { display: flex; gap: 8px; }
+      .setup input[type="text"] {
+        flex: 1;
+        min-width: 0;
+        background: #0f1117;
+        border: 1px solid #313850;
+        border-radius: 8px;
+        color: #e7e9ee;
+        padding: 8px 10px;
+        font-size: 13px;
+        font-family: inherit;
+      }
+      .setup input[type="text"]:focus { outline: none; border-color: #6c8cff; }
+      .setup details summary {
+        font-size: 12px;
+        color: #9aa3b8;
+        cursor: pointer;
+        user-select: none;
+      }
+      .setup details[open] summary { margin-bottom: 10px; }
+      .setup details .field { margin-top: 8px; }
+      .btn.primary { background: #6c8cff; border-color: #6c8cff; color: #0b0e16; font-weight: 600; }
+      .btn.primary:hover { background: #859bff; }
+      .save-row { display: flex; align-items: center; gap: 12px; }
+      .status { font-size: 12px; }
+      .status.ok { color: #22c55e; }
+      .status.warn { color: #f59e0b; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Notifier History</h1>
+      <label class="toggle">
+        <input type="checkbox" id="system-mute" />
+        Mute all
+      </label>
+      <button class="btn" id="clear">Clear</button>
+    </header>
+    <main>
+      <h2>Setup</h2>
+      <div class="setup" id="setup">
+        <div class="field">
+          <label for="topic">ntfy topic (keep it long and unguessable)</label>
+          <div class="row">
+            <input type="text" id="topic" placeholder="winnotif-…" autocomplete="off" spellcheck="false" />
+            <button class="btn" id="gen">Generate</button>
+          </div>
+        </div>
+        <details id="advanced">
+          <summary>Advanced</summary>
+          <div class="field">
+            <label for="server">Server</label>
+            <input type="text" id="server" placeholder="https://ntfy.sh" autocomplete="off" spellcheck="false" />
+          </div>
+          <div class="field">
+            <label for="token">Access token (optional)</label>
+            <input type="text" id="token" placeholder="tk_…" autocomplete="off" spellcheck="false" />
+          </div>
+        </details>
+        <label class="toggle">
+          <input type="checkbox" id="autostart" />
+          Start with Windows
+        </label>
+        <div class="save-row">
+          <button class="btn primary" id="save">Save &amp; Connect</button>
+          <span class="status" id="status"></span>
+        </div>
+      </div>
+
+      <h2>Applications</h2>
+      <div class="apps" id="apps"></div>
+      <h2>History</h2>
+      <div class="history" id="history"></div>
+    </main>
+    <script src="dashboard.js"></script>
+  </body>
+</html>
