@@ -142,13 +142,24 @@ function renderConfig(cfg) {
   $("autostart").checked = !!cfg.autostart;
   $("setup").classList.toggle("needed", !cfg.configured);
   const status = $("status");
-  if (cfg.configured) {
-    status.textContent = `Listening on ${cfg.topic}`;
-    status.className = "status ok";
-  } else {
+  if (!cfg.configured) {
     status.textContent = "Not connected — set a topic and Save.";
     status.className = "status warn";
     $("advanced").open = false;
+    return;
+  }
+  switch (cfg.connection) {
+    case "connected":
+      status.textContent = `Connected — listening on ${cfg.topic}`;
+      status.className = "status ok";
+      break;
+    case "disconnected":
+      status.textContent = `Disconnected from ${cfg.topic} — retrying…`;
+      status.className = "status warn";
+      break;
+    default: // connecting / unknown
+      status.textContent = `Connecting to ${cfg.topic}…`;
+      status.className = "status";
   }
 }
 

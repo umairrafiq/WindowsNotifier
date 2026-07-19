@@ -134,6 +134,34 @@ intercepting. `main.js` also sets `quitting` on `before-quit`.
   start-menu shortcuts, `runAfterFinish`. Icon `build/icon.ico` (generated).
   `build/` is `directories.buildResources`.
 
+### Connection resilience & state (the hibernation fix)
+
+A dead **half-open** socket (typical after the PC hibernates/sleeps) emits no
+`error`/`end`, so the old code sat "connected" forever receiving nothing. Three
+mechanisms now recover:
+
+- **Idle-timeout watchdog** — `req.setTimeout(STALE_MS)` (75s; ntfy keepalives
+  are ~45s and reset it). Prolonged silence → `req.destroy()` → reconnect.
+  Overridable via `NTFY_STALE_MS` (testing).
+- **`powerMonitor.on("resume")`** → `ntfy.reconnectNow()` — immediate fresh
+  connect on wake, rather than waiting out the watchdog.
+- **Always-retry** — every terminal event schedules a reconnect in
+  `RECONNECT_MS` (5s); there is no give-up.
+
+Each connect attempt has a **generation** id (`ctl.gen`); a per-attempt
+`settled` flag plus the generation check ensure **one** terminal transition per
+attempt (a destroyed socket fires both request-`error` and response-`abort`).
+`startNtfy(onMessage, onState)` reports `onState(state, {fails, error})` where
+state ∈ `unconfigured|connecting|connected|disconnected`.
+
+**In `main.js`**, `onConnState` drives: the **tray color/icon** (green / amber /
+red / gray via `tray-*.png` + `trayImage(state)`) and tooltip/status line; an
+**"offline" popup** (`showSystemAlert`) once `fails >= 2` (shown once, guarded by
+`connErrorShown`); and on recovery, a **"Reconnected"** toast plus clearing the
+offline card via the `remote-dismiss` channel to the overlay. `showSystemAlert`
+bypasses mute/snooze since it reports the app's own health. Connection state is
+also included in the dashboard config snapshot.
+
 ### ntfy behavior & the offline backlog
 
 `ntfy.js` subscribes to `<server>/<topic>/json?since=<cursor>` and reconnects on

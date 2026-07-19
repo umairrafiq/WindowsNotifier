@@ -1,6 +1,6 @@
 {
   "name": "windows-notifier",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Always-on-top desktop notifications delivered over ntfy. The notification's web design is described as JSON.",
   "main": "src/main.js",
   "scripts": {

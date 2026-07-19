@@ -178,10 +178,15 @@ function armAutoDismiss(card, payload) {
   const progress = document.createElement("div");
   progress.className = "progress";
   if (accent) progress.style.background = String(accent);
-  progress.style.transition = `width ${duration}ms linear`;
+  // Start at full width with no transition, force a reflow to commit that
+  // starting state, then enable the transition and shrink to 0. Without the
+  // reflow a freshly-inserted card skips the animation entirely (the browser
+  // only ever sees the final 0% width).
   progress.style.width = "100%";
   card.appendChild(progress);
-  requestAnimationFrame(() => (progress.style.width = "0%"));
+  void progress.offsetWidth; // force reflow
+  progress.style.transition = `width ${duration}ms linear`;
+  progress.style.width = "0%";
 
   card._dismissTimer = setTimeout(() => dismiss(card), duration);
 }
@@ -293,3 +298,10 @@ function render(payload) {
 }
 
 window.notifier.onNotification(render);
+
+// Main can ask us to dismiss a card by group key (e.g. clear the connectivity
+// "offline" popup once ntfy reconnects).
+window.notifier.onRemoteDismiss((groupKey) => {
+  const card = cards.get(groupKey);
+  if (card) dismiss(card);
+});

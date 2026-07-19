@@ -10,4 +10,7 @@ contextBridge.exposeInMainWorld("notifier", {
   // Snooze / mute the app a card belongs to, straight from the card.
   snooze: (appId) => ipcRenderer.send("snooze-app", appId),
   muteApp: (appId) => ipcRenderer.send("set-app-mute", appId, true),
+  // Main asks us to dismiss a card (e.g. clear the "offline" popup on reconnect).
+  onRemoteDismiss: (callback) =>
+    ipcRenderer.on("remote-dismiss", (_event, groupKey) => callback(groupKey)),
 });

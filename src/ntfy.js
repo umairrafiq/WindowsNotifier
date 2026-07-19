@@ -11,6 +11,11 @@ const { URL } = require("url");
 const { app } = require("electron");
 
 const RECONNECT_MS = 5000;
+// ntfy sends a keepalive roughly every 45s. If nothing (message or keepalive)
+// arrives within this window the connection is dead — typically because the PC
+// hibernated and the socket is half-open with no error event. Force a reconnect.
+// Overridable via NTFY_STALE_MS (mainly for testing).
+const STALE_MS = Number(process.env.NTFY_STALE_MS) || 75000;
 const DEFAULT_SERVER = "https://ntfy.sh";
 
 // The user-writable config lives in userData so the packaged (read-only) app
@@ -122,6 +127,19 @@ function stopNtfy() {
   active = null;
 }
 
+// Report a connection-state change to the host (main process).
+// state: "unconfigured" | "connecting" | "connected" | "disconnected".
+function emitState(ctl, state, info) {
+  ctl.state = state;
+  if (typeof ctl.onState === "function") {
+    try {
+      ctl.onState(state, info || {});
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 function scheduleReconnect(ctl) {
   if (ctl.closed || ctl.reconnectTimer) return;
   ctl.reconnectTimer = setTimeout(() => {
@@ -151,6 +169,9 @@ function handleLine(ctl, line) {
 }
 
 function connect(ctl) {
+  const gen = ++ctl.gen; // this attempt's id; a newer connect() invalidates it
+  emitState(ctl, "connecting", { fails: ctl.fails });
+
   const base = new URL(ctl.config.server);
   const isHttps = base.protocol === "https:";
   const lib = isHttps ? https : http;
@@ -174,19 +195,37 @@ function connect(ctl) {
     options.headers.Authorization = `Bearer ${ctl.config.token}`;
   }
 
+  // Exactly one terminal transition per attempt: `settled` dedupes the
+  // request-error + response-abort that both fire when we destroy a socket;
+  // the generation check ignores attempts already superseded by a reconnect.
+  let settled = false;
+  const fail = (error) => {
+    if (ctl.closed || settled || gen !== ctl.gen) return;
+    settled = true;
+    ctl.fails += 1;
+    console.error(`ntfy: ${error} (attempt ${ctl.fails})`);
+    emitState(ctl, "disconnected", { fails: ctl.fails, error });
+    scheduleReconnect(ctl);
+  };
+
   const req = lib.request(options, (res) => {
-    if (res.statusCode !== 200) {
-      console.error(`ntfy: HTTP ${res.statusCode} from ${ctl.config.server}`);
-      res.resume();
-      return scheduleReconnect(ctl);
+    if (gen !== ctl.gen) {
+      res.destroy();
+      return;
     }
+    if (res.statusCode !== 200) {
+      res.resume();
+      return fail(`HTTP ${res.statusCode}`);
+    }
+    ctl.fails = 0;
+    emitState(ctl, "connected", {});
     console.log(
       `Listening to ntfy topic "${ctl.config.topic}" on ${ctl.config.server}.`
     );
     res.setEncoding("utf8");
     let buffer = "";
     res.on("data", (chunk) => {
-      if (ctl.closed) return;
+      if (ctl.closed || gen !== ctl.gen) return;
       buffer += chunk;
       let nl;
       while ((nl = buffer.indexOf("\n")) >= 0) {
@@ -195,43 +234,67 @@ function connect(ctl) {
         if (line) handleLine(ctl, line);
       }
     });
-    res.on("end", () => scheduleReconnect(ctl));
-    res.on("error", () => scheduleReconnect(ctl));
+    res.on("end", () => fail("stream ended"));
+    res.on("error", (err) => fail(err.message));
   });
   ctl.req = req;
-  req.on("error", (err) => {
-    if (ctl.closed) return;
-    console.error(`ntfy connection error: ${err.message}`);
-    scheduleReconnect(ctl);
-  });
+  // Idle-timeout watchdog: keepalives reset this; prolonged silence (a dead,
+  // half-open socket after hibernation) trips it and forces a reconnect.
+  req.setTimeout(STALE_MS, () => req.destroy(new Error("idle timeout")));
+  req.on("error", (err) => fail(err.message));
   req.end();
 }
 
 // Starts (or restarts) the subscription. Returns false if no topic is set.
-// `onMessage` is called with each payload, including offline backlog.
-function startNtfy(onMessage) {
+// `onMessage(payload)` gets each notification; `onState(state, info)` gets
+// connection-state changes.
+function startNtfy(onMessage, onState) {
   stopNtfy();
   const config = loadConfig();
   if (!config) {
+    if (typeof onState === "function") onState("unconfigured", {});
     console.log("ntfy not configured (no topic). Waiting for setup.");
     return false;
   }
   active = {
     onMessage,
+    onState,
     config,
     closed: false,
     req: null,
     reconnectTimer: null,
     seenIds: new Set(),
     seen: readLastSeen(),
+    fails: 0,
+    gen: 0,
+    state: "connecting",
   };
   connect(active);
   return true;
 }
 
+// Force an immediate reconnect (e.g. on system resume). No-op if not running.
+function reconnectNow() {
+  const ctl = active;
+  if (!ctl || ctl.closed) return;
+  if (ctl.reconnectTimer) {
+    clearTimeout(ctl.reconnectTimer);
+    ctl.reconnectTimer = null;
+  }
+  if (ctl.req) {
+    try {
+      ctl.req.destroy();
+    } catch {
+      /* ignore */
+    }
+  }
+  connect(ctl); // bumps gen, invalidating the old attempt's handlers
+}
+
 module.exports = {
   startNtfy,
   stopNtfy,
+  reconnectNow,
   loadConfig,
   saveConfig,
   isConfigured,
